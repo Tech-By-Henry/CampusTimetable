@@ -33,7 +33,6 @@ class SuperAdminLoginView(APIView):
                 Q(username__iexact=identifier) | Q(email__iexact=identifier)
             )
         except User.DoesNotExist:
-            # generic message (don’t leak which part failed)
             return Response(
                 {"detail": "No active account found with the given credentials"},
                 status=status.HTTP_401_UNAUTHORIZED,

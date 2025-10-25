@@ -1,3 +1,4 @@
+# superadmin/serializers/auth/login.py
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -12,23 +13,19 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # swap the expected 'username' field for a friendlier name
         self.fields['identifier'] = self.fields.pop(self.username_field)
 
     def validate(self, attrs):
         identifier = attrs.get('identifier') or ""
-        # Resolve identifier → actual username for authenticate()
         try:
             user = User.objects.get(Q(username__iexact=identifier) | Q(email__iexact=identifier))
             attrs[self.username_field] = getattr(user, self.username_field)
         except User.DoesNotExist:
-            # Pass through (will fail auth generically without leaking which part is wrong)
             attrs[self.username_field] = identifier
 
-        attrs.pop('identifier', None)  # parent expects username/password only
+        attrs.pop('identifier', None)
         data = super().validate(attrs)
 
-        # attach compact user info (handy for the frontend)
         data['user'] = {
             "id": self.user.id,
             "username": self.user.get_username(),

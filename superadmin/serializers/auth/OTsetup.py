@@ -1,4 +1,5 @@
-from zoneinfo import ZoneInfo, available_timezones
+# superadmin/serializers/auth/OTsetup.py
+from zoneinfo import ZoneInfo
 import os
 import re
 import secrets
@@ -17,10 +18,6 @@ DIGITS = "23456789"                  # drop 0/1
 ALPHABET = UPPER + LOWER + DIGITS + SAFE_SYMBOLS
 
 def _gen_recovery_code(length: int = 24) -> str:
-    """
-    Crypto-strong generator for a 24-char code including letters, digits, symbols.
-    Ensures at least one from each category (upper, lower, digit, symbol).
-    """
     buckets = [
         secrets.choice(UPPER),
         secrets.choice(LOWER),
@@ -29,17 +26,13 @@ def _gen_recovery_code(length: int = 24) -> str:
     ]
     remaining = [secrets.choice(ALPHABET) for _ in range(max(0, length - len(buckets)))]
     chars = buckets + remaining
-    # Fisher–Yates shuffle via secrets.randbelow to avoid bias
     for i in range(len(chars) - 1, 0, -1):
         j = secrets.randbelow(i + 1)
         chars[i], chars[j] = chars[j], chars[i]
     return "".join(chars)
 
-
 def _gen_pin(digits: int = 6) -> str:
-    # 6-digit zero-padded numeric PIN, cryptographically random
     return f"{secrets.randbelow(10**digits):0{digits}d}"
-
 
 def _valid_timezone(tz: str) -> bool:
     try:
@@ -47,7 +40,6 @@ def _valid_timezone(tz: str) -> bool:
         return True
     except Exception:
         return False
-
 
 class OTSetupSerializer(serializers.Serializer):
     # Required
@@ -67,33 +59,27 @@ class OTSetupSerializer(serializers.Serializer):
     address = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, attrs):
-        # 1) one-time gate
         if User.objects.filter(is_superuser=True).exists() or InstitutionSetting.objects.exists():
             raise serializers.ValidationError("Setup has already been completed.")
 
-        # 2) setup code check (from settings or env)
         configured = getattr(settings, "SUPERADMIN_SETUP_CODE", None) or os.getenv("SUPERADMIN_SETUP_CODE")
         if not configured:
             raise serializers.ValidationError("Setup code is not configured on the server.")
         if attrs.get("setup_code") != configured:
             raise serializers.ValidationError({"setup_code": "Invalid setup code."})
 
-        # 3) password match
         if attrs["password"] != attrs["confirm_password"]:
             raise serializers.ValidationError({"confirm_password": "Passwords do not match."})
 
-        # 4) campus code sanity (uppercase, letters+digits only)
         code = attrs["campus_code"].upper()
         if not re.fullmatch(r"[A-Z0-9]{2,16}", code):
             raise serializers.ValidationError({"campus_code": "Use 2–16 uppercase letters/digits (no spaces)."})
         attrs["campus_code"] = code
 
-        # 5) timezone
         tz = attrs["timezone"]
         if not _valid_timezone(tz):
             raise serializers.ValidationError({"timezone": "Invalid IANA timezone."})
 
-        # 6) email/username uniqueness (early check)
         if User.objects.filter(username=attrs["username"]).exists():
             raise serializers.ValidationError({"username": "Username already taken."})
         if User.objects.filter(email=attrs["email"]).exists():
@@ -102,7 +88,6 @@ class OTSetupSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated):
-        # Create SuperAdmin user
         user = User.objects.create_user(
             username=validated["username"],
             email=validated["email"],
@@ -115,39 +100,34 @@ class OTSetupSerializer(serializers.Serializer):
         user.is_superuser = True
         user.save(update_fields=["is_active", "is_staff", "is_superuser"])
 
-        # Optional contact profile
         SuperAdminProfile.objects.create(
             user=user,
             phone=validated.get("phone", "") or "",
             address=validated.get("address", "") or "",
         )
 
-        # Institution settings
         inst = InstitutionSetting.objects.create(
             name=validated["institution_name"],
             code=validated["campus_code"],
             timezone=validated["timezone"],
         )
 
-        # Generate RCRP
         code_plain = _gen_recovery_code(24)
         pin_plain = _gen_pin(6)
 
-        # Hash & persist only hashes
         RecoverySecret.objects.create(
             user=user,
             recovery_code_hash=make_password(code_plain),
             recovery_pin_hash=make_password(pin_plain),
         )
 
-        # Shape response payload
         return {
             "ok": True,
             "superadmin": {
                 "id": str(user.pk),
                 "email": user.email,
                 "username": user.username,
-                "role": "SUPERADMIN",  # for your frontend; we’re using is_superuser underneath
+                "role": "SUPERADMIN",
             },
             "institution": {
                 "name": inst.name,

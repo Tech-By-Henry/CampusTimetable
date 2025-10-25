@@ -1,3 +1,4 @@
+# superadmin/views/catalog/catalog.py
 from rest_framework import viewsets, filters
 from rest_framework.permissions import IsAuthenticated
 from superadmin.permissions import IsSuperAdmin
