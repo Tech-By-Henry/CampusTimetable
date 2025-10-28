@@ -3,9 +3,13 @@ from rest_framework import viewsets, filters
 from rest_framework.permissions import IsAuthenticated
 from superadmin.permissions import IsSuperAdmin
 from catalog.models import Faculty, Department, Program, Room, AcademicTerm
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from rest_framework import status
 from superadmin.serializers.catalog.catalog import (
     FacultySerializer, DepartmentSerializer, ProgramSerializer, RoomSerializer, AcademicTermSerializer
 )
+
 
 class BaseSuperAdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsSuperAdmin]
@@ -33,9 +37,18 @@ class RoomViewSet(BaseSuperAdminViewSet):
     serializer_class = RoomSerializer
     search_fields = ["name", "code"]
 
+
+
 class AcademicTermViewSet(BaseSuperAdminViewSet):
     queryset = AcademicTerm.objects.all()
     serializer_class = AcademicTermSerializer
     search_fields = ["name", "code"]
     ordering_fields = ["start_date", "end_date", "name", "code"]
     ordering = ["-start_date"]
+
+    @action(detail=False, methods=["get"], url_path="current")
+    def current(self, request):
+        term = AcademicTerm.objects.filter(is_current=True).order_by("-start_date").first()
+        if not term:
+            return Response({"detail": "No term marked as current."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self.get_serializer(term).data)

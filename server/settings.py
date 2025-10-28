@@ -84,6 +84,7 @@ INSTALLED_APPS = [
     "onboarding",
     "mailer",
     "django_celery_results",
+    "institution_admin",
 ]
 
 # -------------------------------------------------

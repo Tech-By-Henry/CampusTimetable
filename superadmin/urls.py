@@ -17,6 +17,8 @@ router.register(r"catalog/departments", DepartmentViewSet, basename="sa-departme
 router.register(r"catalog/programs",    ProgramViewSet,    basename="sa-program")
 router.register(r"catalog/rooms",       RoomViewSet,       basename="sa-room")
 router.register(r"catalog/terms",       AcademicTermViewSet, basename="sa-term")
+router.register(r"catalog/academic-terms", AcademicTermViewSet, basename="academic-terms")
+
 
 urlpatterns = [
     # Login stays a single POST endpoint (not router)

@@ -132,3 +132,4 @@ class IntakeBulkReviewSerializer(serializers.Serializer):
 
         # We return queued count (using 'updated' for backward compatibility)
         return {"updated": queued, "skipped": [], "action": action, "ids": ids}
+

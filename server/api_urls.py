@@ -16,6 +16,10 @@ urlpatterns = [
     path("v1/auth/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("v1/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("v1/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
+    
+    # Admin endpoints could go here too
+    path("v1/admin/", include("institution_admin.urls")),  # admin-only API
+
 
     # OpenAPI schema + Swagger / Redoc
     path("schema/", SpectacularAPIView.as_view(), name="schema"),

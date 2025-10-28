@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.db.models import Q
 
 from rest_framework import permissions, throttling, status, viewsets
 from rest_framework.decorators import action
@@ -19,12 +20,15 @@ from .serializers import (
 
 User = get_user_model()
 
+
 class IsSuperAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.is_superuser)
 
+
 class PublicSubmitThrottle(throttling.AnonRateThrottle):
     rate = "10/min"
+
 
 def _can_manage_link(user, link: IntakeLink) -> bool:
     if not user.is_authenticated:
@@ -33,15 +37,36 @@ def _can_manage_link(user, link: IntakeLink) -> bool:
         return True
     return link.created_by_id == user.id
 
+
 class OnboardingViewSet(viewsets.ViewSet):
     """Router-backed endpoints for onboarding."""
 
     # ---------- Create intake link ----------
-    @action(detail=False, methods=["post"], url_path=r"intake-links", permission_classes=[IsSuperAdmin])
+    @action(detail=False, methods=["post"], url_path=r"intake-links", permission_classes=[permissions.IsAuthenticated])
     def create_intake_link(self, request):
+        """
+        Role-based creation rules:
+          - SuperAdmin: ADMIN / LECTURER / STUDENT
+          - Admin (is_staff): LECTURER / STUDENT
+          - Other authenticated (e.g., lecturers): STUDENT
+        """
+        role = request.data.get("role")
+
+        if request.user.is_superuser:
+            allowed = {IntakeLink.ROLE_ADMIN, IntakeLink.ROLE_LECTURER, IntakeLink.ROLE_STUDENT}
+        elif request.user.is_staff:
+            allowed = {IntakeLink.ROLE_LECTURER, IntakeLink.ROLE_STUDENT}
+        else:
+            allowed = {IntakeLink.ROLE_STUDENT}
+
+        if role not in allowed:
+            return Response(
+                {"detail": f"You are not permitted to create links for role={role}."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         ser = IntakeLinkCreateSerializer(data=request.data, context={"request": request})
-        if not ser.is_valid():
-            return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        ser.is_valid(raise_exception=True)
         link = ser.save()
         return Response(IntakeLinkResponseSerializer(link).data, status=status.HTTP_201_CREATED)
 
@@ -55,8 +80,11 @@ class OnboardingViewSet(viewsets.ViewSet):
         return Response(data, status=status.HTTP_200_OK)
 
     @action(
-        detail=False, methods=["post"], url_path=r"intake/(?P<token>[^/]+)/submit",
-        permission_classes=[permissions.AllowAny], throttle_classes=[PublicSubmitThrottle],
+        detail=False,
+        methods=["post"],
+        url_path=r"intake/(?P<token>[^/]+)/submit",
+        permission_classes=[permissions.AllowAny],
+        throttle_classes=[PublicSubmitThrottle],
     )
     def intake_submit(self, request, token: str):
         link = get_object_or_404(IntakeLink, token=token)
@@ -66,9 +94,12 @@ class OnboardingViewSet(viewsets.ViewSet):
         if not ser.is_valid():
             return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
         sub = ser.save()
-        return Response({"ok": True, "submission_id": sub.id, "message": "Submission received. You’ll be notified after review."}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"ok": True, "submission_id": sub.id, "message": "Submission received. You’ll be notified after review."},
+            status=status.HTTP_201_CREATED,
+        )
 
-    # ---------- Management: per-link submissions (now supports role= filter) ----------
+    # ---------- Management: per-link submissions ----------
     @action(detail=False, methods=["get"], url_path=r"intake/(?P<link_id>\d+)/submissions", permission_classes=[permissions.IsAuthenticated])
     def list_submissions(self, request, link_id: int):
         link = get_object_or_404(IntakeLink, id=link_id)
@@ -108,7 +139,10 @@ class OnboardingViewSet(viewsets.ViewSet):
         approver_id = request.user.id
         for sid in pending_ids:
             approve_and_invite.delay(submission_id=sid, approver_id=approver_id)
-        return Response({"ok": True, "link_id": link.id, "role": link.role, "queued": len(pending_ids), "message": f"Queued {len(pending_ids)} submission(s) for approval + invite."}, status=status.HTTP_200_OK)
+        return Response(
+            {"ok": True, "link_id": link.id, "role": link.role, "queued": len(pending_ids), "message": f"Queued {len(pending_ids)} submission(s) for approval + invite."},
+            status=status.HTTP_200_OK,
+        )
 
     # ---------- NEW: Global listings (role-segmented) ----------
     def _visible_submissions_qs(self, request):
@@ -128,7 +162,7 @@ class OnboardingViewSet(viewsets.ViewSet):
         if link_id:
             qs = qs.filter(link_id=link_id)
         if q:
-            qs = qs.filter(models.Q(email__icontains=q) | models.Q(id_code__icontains=q))
+            qs = qs.filter(Q(email__icontains=q) | Q(id_code__icontains=q))
         return qs
 
     @action(detail=False, methods=["get"], url_path=r"submissions", permission_classes=[permissions.IsAuthenticated])
@@ -167,7 +201,7 @@ class OnboardingViewSet(viewsets.ViewSet):
         data = IntakeSubmissionListItemSerializer(qs, many=True).data
         return Response({"count": len(data), "results": data}, status=status.HTTP_200_OK)
 
-    # ---------- Activation (unchanged) ----------
+    # ---------- Activation ----------
     @action(detail=False, methods=["get"], url_path=r"activation/(?P<token>[^/]+)", permission_classes=[permissions.AllowAny])
     def activation_info(self, request, token: str):
         tok = ActivationToken.from_raw_token(token)
@@ -205,23 +239,44 @@ class OnboardingViewSet(viewsets.ViewSet):
 
         user, created = User.objects.get_or_create(
             email=sub.email,
-            defaults={"username": sub.email, "first_name": sub.first_name, "last_name": sub.last_name, "is_active": True},
+            defaults={
+                "username": sub.email,
+                "first_name": sub.first_name,
+                "last_name": sub.last_name,
+                "is_active": True,
+            },
         )
         if not created:
             changed = False
             if not user.first_name and sub.first_name:
-                user.first_name = sub.first_name; changed = True
+                user.first_name = sub.first_name
+                changed = True
             if not user.last_name and sub.last_name:
-                user.last_name = sub.last_name; changed = True
+                user.last_name = sub.last_name
+                changed = True
             if not user.is_active:
-                user.is_active = True; changed = True
+                user.is_active = True
+                changed = True
             if changed:
                 user.save(update_fields=["first_name", "last_name", "is_active"])
 
-        user.set_password(pwd); user.save()
-        sub.user = user; sub.activated_at = timezone.now()
+        # Set password
+        user.set_password(pwd)
+        user.save()
+
+        # Role-based privilege on activation
+        if sub.role == IntakeLink.ROLE_ADMIN and not user.is_staff:
+            user.is_staff = True
+            user.save(update_fields=["is_staff"])
+
+        # Link submission to user and mark consumed
+        sub.user = user
+        sub.activated_at = timezone.now()
         sub.save(update_fields=["user", "activated_at"])
-        tok.consumed_at = timezone.now(); tok.save(update_fields=["consumed_at"])
+
+        tok.consumed_at = timezone.now()
+        tok.save(update_fields=["consumed_at"])
+
         return Response({"ok": True, "message": "Account activated."}, status=status.HTTP_200_OK)
 
     # helpers
@@ -236,3 +291,4 @@ class OnboardingViewSet(viewsets.ViewSet):
         else:
             local_mask = local[:2] + "*" * (len(local) - 2)
         return f"{local_mask}@{domain}"
+

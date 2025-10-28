@@ -188,3 +188,4 @@ class ActivationToken(models.Model):
     def from_raw_token(cls, raw_token: str):
         h = _sha256_hex(raw_token)
         return cls.objects.filter(token_hash=h).select_related("submission", "submission__link").first()
+
