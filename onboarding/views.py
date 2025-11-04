@@ -44,13 +44,7 @@ class OnboardingViewSet(viewsets.ViewSet):
     # ---------- Create intake link ----------
     @action(detail=False, methods=["post"], url_path=r"intake-links", permission_classes=[permissions.IsAuthenticated])
     def create_intake_link(self, request):
-        """
-        Role-based creation rules:
-          - SuperAdmin: ADMIN / LECTURER / STUDENT
-          - Admin (is_staff): LECTURER / STUDENT
-          - Other authenticated (e.g., lecturers): STUDENT
-        """
-        role = request.data.get("role")
+        role = (request.data.get("role") or "").strip().upper()   # <-- normalize
 
         if request.user.is_superuser:
             allowed = {IntakeLink.ROLE_ADMIN, IntakeLink.ROLE_LECTURER, IntakeLink.ROLE_STUDENT}
@@ -65,10 +59,11 @@ class OnboardingViewSet(viewsets.ViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        ser = IntakeLinkCreateSerializer(data=request.data, context={"request": request})
+        ser = IntakeLinkCreateSerializer(data={"role": role}, context={"request": request})
         ser.is_valid(raise_exception=True)
         link = ser.save()
         return Response(IntakeLinkResponseSerializer(link).data, status=status.HTTP_201_CREATED)
+
 
     # ---------- Public: link info + submit ----------
     @action(detail=False, methods=["get"], url_path=r"intake/(?P<token>[^/]+)", permission_classes=[permissions.AllowAny])

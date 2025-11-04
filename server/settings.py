@@ -85,6 +85,8 @@ INSTALLED_APPS = [
     "mailer",
     "django_celery_results",
     "institution_admin",
+    "lecturers",
+    "students",
 ]
 
 # -------------------------------------------------
@@ -237,3 +239,6 @@ EMAIL_SUBJECT_PREFIX = env("EMAIL_SUBJECT_PREFIX")
 ACTIVATION_TTL_HOURS = env.int("ACTIVATION_TTL_HOURS")
 FRONTEND_BASE_URL = env("FRONTEND_BASE_URL")
 EMAIL_REPLY_TO = env("EMAIL_REPLY_TO")
+
+
+TIMETABLE_ADMIN_APP_LABEL = "institution_admin"  # <-- put YOUR real app label here

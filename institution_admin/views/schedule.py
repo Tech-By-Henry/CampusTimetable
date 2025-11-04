@@ -1,14 +1,3 @@
-"""
-Scheduling endpoints:
-- TimeGrid CRUD with automatic slot materialization
-- Slot list/retrieve
-- TimetableEntry CRUD (placements)
-- Schedule utilities: precheck
-- NEW: TimetableEntry.reschedule() action to perform a prechecked move
-- NEW: Timetable live CSV export per-lecturer (optional convenience)
-
-These additions make Step 14 operations simpler from the client.
-"""
 import datetime as dt
 from django.db import transaction, models
 from django.http import HttpResponse
@@ -111,7 +100,7 @@ class SlotViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.Gen
 class TimetableEntryViewSet(viewsets.ModelViewSet):
     queryset = TimetableEntry.objects.select_related(
         "term", "slot",
-        "offering__course", "offering__cohort", "offering__level", "offering__stream"
+        "offering__course", "offering__cohort", "offering__level"
     ).all()
     serializer_class = PlacementSerializer
     permission_classes = [IsAuthenticated, IsInstitutionAdmin]
@@ -126,7 +115,6 @@ class TimetableEntryViewSet(viewsets.ModelViewSet):
         if q.get("lecturer"): qs = qs.filter(offering__assignments__active=True,
                                              offering__assignments__lecturer_id=q["lecturer"])
         if q.get("level"):    qs = qs.filter(offering__level_id=q["level"])
-        if q.get("stream"):   qs = qs.filter(offering__stream_id=q["stream"])
         if q.get("day"):      qs = qs.filter(slot__day=q["day"])
         return qs
 
@@ -135,10 +123,6 @@ class TimetableEntryViewSet(viewsets.ModelViewSet):
         """
         POST /api/v1/admin/timetable/{id}/reschedule
         Body: { "slot": <slot_id>, "room": <room_id|null> }
-
-        Runs the same validations as serializer.validate (via precheck),
-        and only applies the move if no violations are found. Returns 400
-        with a list of violations otherwise.
         """
         try:
             tt = self.get_queryset().get(pk=pk)
@@ -151,7 +135,6 @@ class TimetableEntryViewSet(viewsets.ModelViewSet):
         if not slot_id:
             return Response({"detail": "slot is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Precheck using the same rules as the public precheck endpoint
         pre_ser = PrecheckSerializer(data={
             "term": tt.term_id,
             "offering": tt.offering_id,
@@ -164,7 +147,6 @@ class TimetableEntryViewSet(viewsets.ModelViewSet):
         if not pre_resp["ok"]:
             return Response(pre_resp, status=status.HTTP_400_BAD_REQUEST)
 
-        # Apply
         tt.slot_id = slot_id
         tt.room_id = room_id
         tt.save(update_fields=["slot_id", "room_id"])
@@ -172,21 +154,16 @@ class TimetableEntryViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], url_path="lecturer.csv")
     def lecturer_live_csv(self, request):
-        """
-        GET /api/v1/admin/timetable/lecturer.csv?term=<id>&lecturer=<user_id>
-        CSV of LIVE (not published) timetable for a lecturer in a term.
-        """
         term_id = request.query_params.get("term")
         lec_id  = request.query_params.get("lecturer")
         if not term_id or not lec_id:
             return Response({"detail": "term and lecturer are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # offerings where lecturer has active assignment
         off_ids = TeachingAssignment.objects.filter(lecturer_id=lec_id, active=True)\
                                             .values_list("offering_id", flat=True)
 
         qs = (TimetableEntry.objects
-                .select_related("slot", "offering__course", "offering__cohort", "offering__level", "offering__stream", "room")
+                .select_related("slot", "offering__course", "offering__cohort", "offering__level", "room")
                 .filter(term_id=term_id, offering_id__in=off_ids)
                 .order_by("slot__day", "slot__slot_index", "offering__cohort__label", "offering__course__code"))
 
@@ -194,7 +171,7 @@ class TimetableEntryViewSet(viewsets.ModelViewSet):
         resp["Content-Disposition"] = 'attachment; filename="live_lecturer_schedule.csv"'
         w = csv.writer(resp)
         w.writerow(["day", "slot_index", "start_time", "end_time", "room_name",
-                    "course_code", "course_title", "cohort_label", "level", "stream"])
+                    "course_code", "course_title", "cohort_label", "level"])
         for t in qs:
             s = t.slot
             off = t.offering
@@ -206,7 +183,6 @@ class TimetableEntryViewSet(viewsets.ModelViewSet):
                 off.course.title if off.course_id else "",
                 off.cohort.label if off.cohort_id else "",
                 off.level.name if off.level_id else "",
-                (off.stream.code if off.stream_id else "")
             ])
         return resp
 
@@ -241,17 +217,10 @@ class ScheduleViewSet(viewsets.ViewSet):
         if slot.is_break:
             violations.append("slot is a break")
 
-        # cohort clash (stream-aware mirror of serializer)
+        # cohort clash
         base_q = TimetableEntry.objects.filter(term=term, slot=slot)
-        if offering.stream_id:
-            if base_q.filter(
-                models.Q(offering__cohort_id=offering.cohort_id) &
-                (models.Q(offering__stream__isnull=True) | models.Q(offering__stream_id=offering.stream_id))
-            ).exists():
-                violations.append("cohort/stream already has a class in this slot")
-        else:
-            if base_q.filter(offering__cohort_id=offering.cohort_id).exists():
-                violations.append("cohort already has a class in this slot")
+        if base_q.filter(offering__cohort_id=offering.cohort_id).exists():
+            violations.append("cohort already has a class in this slot")
 
         # lecturer clash
         lect_ids = list(TeachingAssignment.objects.filter(offering=offering, active=True)
@@ -272,8 +241,6 @@ class ScheduleViewSet(viewsets.ViewSet):
         if room is not None and RoomBlackout.objects.filter(term=term, slot=slot, room=room).exists():
             violations.append("room blackout")
         blk_q = CohortBlackout.objects.filter(term=term, slot=slot, cohort=offering.cohort)
-        if offering.stream_id:
-            blk_q = blk_q.filter(models.Q(stream__isnull=True) | models.Q(stream_id=offering.stream_id))
         if blk_q.exists():
             violations.append("cohort blackout")
 
@@ -290,12 +257,7 @@ class ScheduleViewSet(viewsets.ViewSet):
 
             # cohort daily
             cohort_day_q = TimetableEntry.objects.filter(term=term, slot__day=day)
-            if offering.stream_id:
-                cohort_day_q = cohort_day_q.filter(offering__cohort_id=offering.cohort_id).filter(
-                    models.Q(offering__stream__isnull=True) | models.Q(offering__stream_id=offering.stream_id)
-                )
-            else:
-                cohort_day_q = cohort_day_q.filter(offering__cohort_id=offering.cohort_id)
+            cohort_day_q = cohort_day_q.filter(offering__cohort_id=offering.cohort_id)
             if (gc.max_daily_slots_per_cohort or 0) and cohort_day_q.count() + 1 > gc.max_daily_slots_per_cohort:
                 violations.append(f"cohort daily limit {gc.max_daily_slots_per_cohort}")
 
@@ -338,7 +300,6 @@ class ScheduleViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["post"], url_path="precheck")
     def precheck(self, request):
-        """HTTP wrapper for _precheck_internal; same response format as scripts expect."""
         ser = PrecheckSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         result = self._precheck_internal(ser.validated_data)
@@ -379,7 +340,7 @@ class RoomBlackoutViewSet(viewsets.ModelViewSet):
 
 
 class CohortBlackoutViewSet(viewsets.ModelViewSet):
-    queryset = CohortBlackout.objects.select_related("term", "slot", "cohort", "stream").all()
+    queryset = CohortBlackout.objects.select_related("term", "slot", "cohort").all()
     serializer_class = CohortBlackoutSerializer
     permission_classes = [IsAuthenticated, IsInstitutionAdmin]
     filter_backends = [filters.OrderingFilter]
@@ -391,10 +352,8 @@ class CohortBlackoutViewSet(viewsets.ModelViewSet):
         if q.get("term"): qs = qs.filter(term_id=q["term"])
         if q.get("slot"): qs = qs.filter(slot_id=q["slot"])
         if q.get("cohort"): qs = qs.filter(cohort_id=q["cohort"])
-        if q.get("stream"): qs = qs.filter(stream_id=q["stream"])
         return qs
 
-# ----- Global constraints -----
 
 class GlobalConstraintViewSet(viewsets.ModelViewSet):
     queryset = GlobalConstraint.objects.select_related("term").all()
@@ -404,10 +363,6 @@ class GlobalConstraintViewSet(viewsets.ModelViewSet):
     ordering = ["-updated_at"]
 
     def create(self, request, *args, **kwargs):
-        """
-        Upsert semantics by term: POST will update an existing row for the term,
-        or create if it doesn't exist.
-        """
         term_id = request.data.get("term")
         existing = GlobalConstraint.objects.filter(term_id=term_id).first()
         if existing:

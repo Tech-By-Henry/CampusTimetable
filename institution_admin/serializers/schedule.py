@@ -49,7 +49,7 @@ class RoomBlackoutSerializer(serializers.ModelSerializer):
 class CohortBlackoutSerializer(serializers.ModelSerializer):
     class Meta:
         model = CohortBlackout
-        fields = ["id", "term", "slot", "cohort", "stream", "reason", "created_at"]
+        fields = ["id", "term", "slot", "cohort", "reason", "created_at"]
 
 
 class GlobalConstraintSerializer(serializers.ModelSerializer):
@@ -94,17 +94,11 @@ class PlacementSerializer(serializers.ModelSerializer):
         if slot.is_break:
             raise serializers.ValidationError("Cannot place a class on a break slot.")
 
-        # ----- STREAM-AWARE COHORT CLASH -----
+        # ----- COHORT CLASH -----
         base_q = TimetableEntry.objects.filter(term=term, slot=slot).exclude(id=getattr(inst, "id", None))
-        if offering.stream_id:
-            cohort_conflict = base_q.filter(
-                Q(offering__cohort_id=offering.cohort_id) &
-                (Q(offering__stream__isnull=True) | Q(offering__stream_id=offering.stream_id))
-            ).exists()
-        else:
-            cohort_conflict = base_q.filter(offering__cohort_id=offering.cohort_id).exists()
+        cohort_conflict = base_q.filter(offering__cohort_id=offering.cohort_id).exists()
         if cohort_conflict:
-            raise serializers.ValidationError("Cohort/stream already has a class in this slot.")
+            raise serializers.ValidationError("Cohort already has a class in this slot.")
 
         # ----- LECTURER CLASH -----
         lect_ids = list(TeachingAssignment.objects.filter(offering=offering, active=True)
@@ -127,8 +121,6 @@ class PlacementSerializer(serializers.ModelSerializer):
         if room is not None and RoomBlackout.objects.filter(term=term, slot=slot, room=room).exists():
             raise serializers.ValidationError("Room blackout prevents this slot.")
         blk_q = CohortBlackout.objects.filter(term=term, slot=slot, cohort=offering.cohort)
-        if offering.stream_id:
-            blk_q = blk_q.filter(Q(stream__isnull=True) | Q(stream_id=offering.stream_id))
         if blk_q.exists():
             raise serializers.ValidationError("Cohort blackout prevents this slot.")
 
@@ -146,14 +138,7 @@ class PlacementSerializer(serializers.ModelSerializer):
             # Max daily per cohort
             cohort_day_q = TimetableEntry.objects.filter(term=term, slot__day=day) \
                                .exclude(id=getattr(inst, "id", None))
-            if offering.stream_id:
-                cohort_day_q = cohort_day_q.filter(
-                    offering__cohort_id=offering.cohort_id
-                ).filter(
-                    Q(offering__stream__isnull=True) | Q(offering__stream_id=offering.stream_id)
-                )
-            else:
-                cohort_day_q = cohort_day_q.filter(offering__cohort_id=offering.cohort_id)
+            cohort_day_q = cohort_day_q.filter(offering__cohort_id=offering.cohort_id)
             limit = gc.max_daily_slots_per_cohort or 0
             if limit and cohort_day_q.count() + 1 > limit:
                 raise serializers.ValidationError(f"Max daily load for cohort would exceed {limit} slots.")

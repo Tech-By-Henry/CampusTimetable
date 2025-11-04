@@ -6,7 +6,6 @@ class CourseOfferingSerializer(serializers.ModelSerializer):
     course_title = serializers.CharField(source="course.title", read_only=True)
     cohort_label = serializers.CharField(source="cohort.label", read_only=True)
     level_name   = serializers.CharField(source="level.name", read_only=True)
-    stream_code  = serializers.CharField(source="stream.code", read_only=True)
 
     class Meta:
         model = CourseOffering
@@ -14,7 +13,6 @@ class CourseOfferingSerializer(serializers.ModelSerializer):
             "id",
             "term", "cohort", "level", "semester",
             "course", "course_code", "course_title",
-            "stream", "stream_code",
             "capacity_need", "room_features",
             "created_at",
             "cohort_label", "level_name",
@@ -25,10 +23,6 @@ class CourseOfferingSerializer(serializers.ModelSerializer):
         cohort  = attrs.get("cohort")  or (inst and inst.cohort)
         level   = attrs.get("level")   or (inst and inst.level)
         sem     = int(attrs.get("semester") or (inst and inst.semester) or 1)
-        stream  = attrs.get("stream")  if "stream" in attrs else (inst and inst.stream)
-
-        if stream and stream.cohort_id != cohort.id:
-            raise serializers.ValidationError("stream does not belong to this cohort.")
 
         cl = CohortLevel.objects.filter(cohort=cohort, level=level).first()
         if not cl:

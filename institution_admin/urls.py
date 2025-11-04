@@ -7,17 +7,26 @@ from .views.courses import CourseViewSet
 from .views.offerings import CourseOfferingViewSet
 from .views.assignments import TeachingAssignmentViewSet
 from .views.lecturers import AdminLecturersViewSet
+from .views.cohort_auto import CohortAutoCreateConfigViewSet
+from .views.cohort_manual import CohortManualCreateViewSet
 from .views.schedule import (
     TimeGridViewSet, SlotViewSet, TimetableEntryViewSet, ScheduleViewSet,
     LecturerBlackoutViewSet, RoomBlackoutViewSet, CohortBlackoutViewSet, GlobalConstraintViewSet
 )
 # NEW
 from .views.publish import PublishedTimetableViewSet
+# existing router.register(... cohorts ... ) remains
+
 
 router = DefaultRouter()
 router.register(r"auth",        AdminAuthViewSet,          basename="admin-auth")
 router.register(r"levels",      LevelViewSet,              basename="admin-levels")
 router.register(r"cohorts",     ProgramCohortViewSet,      basename="admin-cohorts")
+router.register(r"cohort-auto-config", CohortAutoCreateConfigViewSet, basename="admin-cohort-auto")
+router.register(r"cohorts-manual", CohortManualCreateViewSet, basename="admin-cohort-manual")
+
+
+
 router.register(r"courses",     CourseViewSet,             basename="admin-courses")
 router.register(r"offerings",   CourseOfferingViewSet,     basename="admin-offerings")
 router.register(r"assignments", TeachingAssignmentViewSet, basename="admin-assignments")
@@ -35,3 +44,5 @@ router.register(r"constraints/global",    GlobalConstraintViewSet, basename="adm
 router.register(r"publish",               PublishedTimetableViewSet, basename="admin-publish")
 
 urlpatterns = router.urls
+
+

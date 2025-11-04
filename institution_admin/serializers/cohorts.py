@@ -1,10 +1,13 @@
+# institution_admin/serializers/cohorts.py
 from rest_framework import serializers
 from catalog.models import Level
-from institution_admin.models import ProgramCohort, CohortLevel, CohortStream
+from institution_admin.models import ProgramCohort, CohortLevel
 
 class ProgramCohortSerializer(serializers.ModelSerializer):
     program_name = serializers.CharField(source="program.name", read_only=True)
     program_code = serializers.CharField(source="program.code", read_only=True)
+    is_auto = serializers.BooleanField(read_only=True)
+    auto_config = serializers.IntegerField(source="auto_config.id", read_only=True)
 
     class Meta:
         model = ProgramCohort
@@ -16,6 +19,8 @@ class ProgramCohortSerializer(serializers.ModelSerializer):
             "label",
             "session_start_year",
             "session_end_year",
+            "is_auto",
+            "auto_config",
             "created_at",
         ]
 
@@ -26,6 +31,7 @@ class ProgramCohortSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
+
 class CohortLevelItemSerializer(serializers.ModelSerializer):
     level_name = serializers.CharField(source="level.name", read_only=True)
 
@@ -33,9 +39,11 @@ class CohortLevelItemSerializer(serializers.ModelSerializer):
         model = CohortLevel
         fields = ["id", "level", "level_name", "position", "semesters"]
 
+
 class CohortLevelPathSetSerializer(serializers.Serializer):
     """
     Replace a cohort's level path in one shot.
+    Example payload:
     {
       "levels": [
         { "level": 1, "position": 1, "semesters": 2 },
@@ -51,27 +59,26 @@ class CohortLevelPathSetSerializer(serializers.Serializer):
     def validate(self, attrs):
         items = attrs["levels"]
 
+        # positions must be contiguous starting at 1
         positions = [it.get("position") for it in items]
         if sorted(positions) != list(range(1, len(items) + 1)):
             raise serializers.ValidationError("Positions must be a contiguous sequence starting at 1.")
 
+        # no duplicate level ids
         level_ids = [it.get("level") for it in items]
         if len(level_ids) != len(set(level_ids)):
             raise serializers.ValidationError("Duplicate level ids in path.")
 
+        # ensure Levels exist
         existing = set(Level.objects.filter(id__in=level_ids).values_list("id", flat=True))
         missing = [lid for lid in level_ids if lid not in existing]
         if missing:
             raise serializers.ValidationError(f"Unknown Level ids: {missing}")
 
+        # semesters sanity check
         for it in items:
             sems = int(it.get("semesters", 2))
             if sems < 1 or sems > 4:
                 raise serializers.ValidationError("semesters must be between 1 and 4.")
 
         return attrs
-
-class CohortStreamSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = CohortStream
-        fields = ["id", "name", "code", "is_active"]

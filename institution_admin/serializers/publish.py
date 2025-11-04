@@ -1,8 +1,3 @@
-"""
-Serializers for publishing (snapshots) with a small convenience:
-- Accept `label` as an alias for `note` on create, so callers can send either.
-- Expose `label` read-only in the output (mirrors `note`) for clarity in UIs.
-"""
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
@@ -10,7 +5,6 @@ from catalog.models import AcademicTerm
 from institution_admin.models import PublishedTimetable, PublishedEntry
 
 User = get_user_model()
-
 
 class PublishRequestSerializer(serializers.Serializer):
     term = serializers.PrimaryKeyRelatedField(queryset=AcademicTerm.objects.all())
@@ -27,7 +21,6 @@ class PublishRequestSerializer(serializers.Serializer):
             attrs["note"] = label
         return super().validate(attrs)
 
-
 class PublishedTimetableSerializer(serializers.ModelSerializer):
     term_label = serializers.SerializerMethodField()
     entries_count = serializers.IntegerField(read_only=True)
@@ -43,13 +36,10 @@ class PublishedTimetableSerializer(serializers.ModelSerializer):
         read_only_fields = ["version", "is_current", "created_by", "created_at", "entries_count", "label"]
 
     def get_term_label(self, obj):
-        # Adjust if your AcademicTerm has different attributes
         return getattr(obj.term, "name", f"Term {obj.term_id}")
 
     def get_label(self, obj):
-        # Mirror 'note' as a user-visible label
         return obj.note
-
 
 class PublishedEntrySerializer(serializers.ModelSerializer):
     class Meta:
@@ -59,7 +49,7 @@ class PublishedEntrySerializer(serializers.ModelSerializer):
             "offering", "slot", "room",
             "day", "slot_index", "start_time", "end_time", "room_name",
             "course_code", "course_title",
-            "cohort_label", "level_name", "stream_code",
+            "cohort_label", "level_name",
             "created_at",
         ]
         read_only_fields = fields
