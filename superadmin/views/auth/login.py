@@ -1,4 +1,4 @@
-# superadmin/views/auth/login.py
+# institution_owner/views/auth/login.py
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from rest_framework.views import APIView
@@ -11,7 +11,7 @@ User = get_user_model()
 
 class SuperAdminLoginView(APIView):
     """
-    POST /api/v1/superadmin/auth/login/
+    POST /api/v1/institution_owner/auth/login/
     Body: { "identifier": "<username or email>", "password": "..." }
     Returns: { refresh, access, user }
     """

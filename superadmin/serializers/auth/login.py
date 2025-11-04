@@ -1,4 +1,4 @@
-# superadmin/serializers/auth/login.py
+# institution_owner/serializers/auth/login.py
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer

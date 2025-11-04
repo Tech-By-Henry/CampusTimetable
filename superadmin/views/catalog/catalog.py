@@ -1,12 +1,12 @@
-# superadmin/views/catalog/catalog.py
+# institution_owner/views/catalog/catalog.py
 from rest_framework import viewsets, filters
 from rest_framework.permissions import IsAuthenticated
-from superadmin.permissions import IsSuperAdmin
+from institution_owner.permissions import IsSuperAdmin
 from catalog.models import Faculty, Department, Program, Room, AcademicTerm
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework import status
-from superadmin.serializers.catalog.catalog import (
+from institution_owner.serializers.catalog.catalog import (
     FacultySerializer, DepartmentSerializer, ProgramSerializer, RoomSerializer, AcademicTermSerializer
 )
 

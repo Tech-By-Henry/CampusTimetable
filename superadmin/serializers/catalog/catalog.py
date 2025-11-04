@@ -1,4 +1,4 @@
-# superadmin/serializers/catalog/catalog.py
+# institution_owner/serializers/catalog/catalog.py
 from rest_framework import serializers
 from catalog.models import Faculty, Department, Program, Room, AcademicTerm
 

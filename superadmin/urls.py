@@ -1,15 +1,15 @@
-# superadmin/urls.py
+# institution_owner/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from superadmin.views.auth.OTsetup import OTSetupViewSet
-from superadmin.views.auth.login import SuperAdminLoginView
-from superadmin.views.catalog.catalog import (
+from institution_owner.views.auth.OTsetup import OTSetupViewSet
+from institution_owner.views.auth.login import SuperAdminLoginView
+from institution_owner.views.catalog.catalog import (
     FacultyViewSet, DepartmentViewSet, ProgramViewSet, RoomViewSet, AcademicTermViewSet
 )
 
 router = DefaultRouter()
 # Auth (router-based for setup)
-router.register(r"auth/ot-setup", OTSetupViewSet, basename="superadmin-ot-setup")
+router.register(r"auth/ot-setup", OTSetupViewSet, basename="institution_owner-ot-setup")
 
 # Catalog (router-based)
 router.register(r"catalog/faculties",   FacultyViewSet,    basename="sa-faculty")
@@ -22,7 +22,7 @@ router.register(r"catalog/academic-terms", AcademicTermViewSet, basename="academ
 
 urlpatterns = [
     # Login stays a single POST endpoint (not router)
-    path("auth/login/", SuperAdminLoginView.as_view(), name="superadmin-login"),
+    path("auth/login/", SuperAdminLoginView.as_view(), name="institution_owner-login"),
     # Everything else via router
     path("", include(router.urls)),
 ]

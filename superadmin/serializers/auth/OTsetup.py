@@ -1,4 +1,4 @@
-# superadmin/serializers/auth/OTsetup.py
+# institution_owner/serializers/auth/OTsetup.py
 from zoneinfo import ZoneInfo
 import os
 import re
@@ -7,7 +7,7 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.auth.hashers import make_password
 from rest_framework import serializers
-from superadmin.models import InstitutionSetting, SuperAdminProfile, RecoverySecret
+from institution_owner.models import InstitutionSetting, SuperAdminProfile, RecoverySecret
 
 User = get_user_model()
 
@@ -123,11 +123,11 @@ class OTSetupSerializer(serializers.Serializer):
 
         return {
             "ok": True,
-            "superadmin": {
+            "institution_owner": {
                 "id": str(user.pk),
                 "email": user.email,
                 "username": user.username,
-                "role": "SUPERADMIN",
+                "role": "INSTITUTION_OWNER",
             },
             "institution": {
                 "name": inst.name,
@@ -139,5 +139,5 @@ class OTSetupSerializer(serializers.Serializer):
                 "recovery_pin": pin_plain,
                 "note": "Store securely. This is shown only once.",
             },
-            "message": "SuperAdmin created. One-time setup complete.",
+            "message": "InstitutionOwner created. One-time setup complete.",
         }

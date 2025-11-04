@@ -79,7 +79,7 @@ INSTALLED_APPS = [
     "drf_spectacular_sidecar",
 
     # Internal apps
-    "superadmin",
+    "institution_owner",
     "catalog",
     "onboarding",
     "mailer",
@@ -165,7 +165,7 @@ REST_FRAMEWORK = {
 # OpenAPI / Swagger settings
 SPECTACULAR_SETTINGS = {
     "TITLE": "CampusTimetable API",
-    "DESCRIPTION": "Swagger docs for SuperAdmin, Onboarding, Catalog, etc.",
+    "DESCRIPTION": "Swagger docs for InstitutionOwner, Onboarding, Catalog, etc.",
     "VERSION": "0.1.0",
     "SERVERS": [{"url": "http://localhost:8000"}],
     "COMPONENTS": {

@@ -1,4 +1,4 @@
-# superadmin/models.py
+# institution_owner/models.py
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -27,15 +27,15 @@ class InstitutionSetting(models.Model):
 
 class SuperAdminProfile(models.Model):
     """
-    Optional contact/profile fields for the SuperAdmin user.
+    Optional contact/profile fields for the InstitutionOwner user.
     """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="superadmin_profile")
     phone = models.CharField(max_length=32, blank=True, default="")
     address = models.TextField(blank=True, default="")
 
     class Meta:
-        verbose_name = "SuperAdmin Profile"
-        verbose_name_plural = "SuperAdmin Profiles"
+        verbose_name = "InstitutionOwner Profile"
+        verbose_name_plural = "InstitutionOwner Profiles"
 
     def __str__(self):
         return f"SuperAdminProfile<{self.user.email}>"

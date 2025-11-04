@@ -1,10 +1,10 @@
-# superadmin/views/auth/OTsetup.py
+# institution_owner/views/auth/OTsetup.py
 from django.contrib.auth import get_user_model
 from rest_framework import status, throttling, viewsets
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from superadmin.serializers.auth.OTsetup import OTSetupSerializer
-from superadmin.models import InstitutionSetting
+from institution_owner.serializers.auth.OTsetup import OTSetupSerializer
+from institution_owner.models import InstitutionSetting
 
 User = get_user_model()
 
@@ -14,7 +14,7 @@ class SetupBurstThrottle(throttling.AnonRateThrottle):
 
 class OTSetupViewSet(viewsets.ViewSet):
     """
-    Router path (POST): /api/v1/superadmin/auth/ot-setup/
+    Router path (POST): /api/v1/institution_owner/auth/ot-setup/
     Body: OTSetupSerializer payload
     """
     authentication_classes = []   # public, one-time

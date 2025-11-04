@@ -82,7 +82,7 @@ class IntakeSubmitSerializer(serializers.Serializer):
         return sub
 
 
-# -------- Admin/SuperAdmin management --------
+# -------- Admin/InstitutionOwner management --------
 
 class IntakeSubmissionListItemSerializer(serializers.ModelSerializer):
     class Meta:
